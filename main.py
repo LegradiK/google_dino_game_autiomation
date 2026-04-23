@@ -1,10 +1,21 @@
+import os
+os.environ['DISPLAY'] = ':0'
+os.environ['XAUTHORITY'] = os.path.expanduser('~/.Xauthority')
+os.environ['XDG_SESSION_TYPE'] = 'x11'
+os.environ['MOZ_ENABLE_WAYLAND'] = '0'
+os.environ['GTK_MODULES'] = ''
+
 import pyautogui
+import subprocess
+import time
 from PIL import ImageGrab
 
-# Google Dinosaur Game website
 URL = "https://elgoog.im/dinosaur-game/"
 
-# Get the size of the primary monitor.
-screenWidth, screenHeight = pyautogui.size() 
+subprocess.Popen(['firefox', '--new-window', URL])
+time.sleep(5)  # increase to 6-7 if Firefox loads slowly on your machine
 
-print(screenHeight, screenWidth)
+screenWidth, screenHeight = pyautogui.size()
+pyautogui.click(screenWidth // 2, screenHeight // 2)
+time.sleep(0.5)
+pyautogui.press('space')
