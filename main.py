@@ -17,8 +17,11 @@ import numpy as np
 URL = "https://elgoog.im/dinosaur-game/"
 detection_box = None
 baseline_edges = None
+screenWidth = None
+screenHeight = None
 
 def start_game():
+    global screenWidth, screenHeight
     """ Open the webpage, then start the game"""
 
     subprocess.Popen(['firefox', '--new-window', URL])
@@ -27,12 +30,13 @@ def start_game():
     screenWidth, screenHeight = pyautogui.size()
 
     # click the screen to recognise
-    pyautogui.click(screenWidth - 200, screenHeight - 200)
+    pyautogui.click(screenWidth // 2, screenHeight // 2)
     time.sleep(0.5)
 
     # let the game start
     pyautogui.press('space')
     time.sleep(2)
+    return screenWidth, screenHeight
 
 def game_screenshot():
     screenshot = ImageGrab.grab()
@@ -79,13 +83,15 @@ def find_game_screen():
         draw.rectangle([left, top, right, bottom], outline="red", width=3)
         # img_copy.save("detected_game.png")
         # img_copy.show()
-        # Look ~100-200 pixels ahead of the dino's position
-        scan_x_start = left + 150 
-        scan_x_end = left + 250
+        # Look some pixels ahead of the dino's position
+        scan_x_start = left + 350 
+        scan_x_end = left + 450
         # Focus on the bottom half of the game area where cacti are
         scan_y_start = top + (bottom - top) // 2 
+        scan_y_start = bottom - 60  
+        scan_y_end = bottom - 10 
 
-        detection_box = (scan_x_start, scan_y_start, scan_x_end, bottom)
+        detection_box = (scan_x_start, scan_y_start, scan_x_end, scan_y_end)
         
         return best_region, detection_box
     else:
@@ -94,12 +100,14 @@ def find_game_screen():
     
 def capture_baseline(detection_box):
     global baseline_edges
+    print(detection_box)
     frame = ImageGrab.grab(bbox=detection_box).convert('L')
     edges = np.array(frame.filter(ImageFilter.FIND_EDGES))
     baseline_edges = edges
+    # print(baseline_edges)
 
 
-def check_for_obstruction(detection_box, threshold=30):
+def is_obstructed(detection_box, threshold=20):
     global baseline_edges
     current_frame = ImageGrab.grab(bbox=detection_box).convert('L')
     edges = np.array(current_frame.filter(ImageFilter.FIND_EDGES))
@@ -109,22 +117,49 @@ def check_for_obstruction(detection_box, threshold=30):
     
     # Compare current edges to baseline — large diff means obstacle appeared
     diff = np.abs(edges.astype(int) - baseline_edges.astype(int))
-    return diff.mean() > threshold
+    if diff.mean() > threshold:
+        print("An obstruction is found.")
+        return True
+    else:
+        return False
 
 def jump_dino():
+    pyautogui.click(screenWidth // 2, screenHeight // 2)
     pyautogui.press('space')
+
+
+# game area
+
+start_time = time.time()
+max_duration = 120
 
 dino_alive = True
 
 start_game()
 game_screenshot()
-find_game_screen()
+result = find_game_screen()
+
+if result is None:
+    print("Could not find game screen. Exiting.")
+    exit()
+
+best_region, detection_box = result   # ← now actually unpacked
+# print(result)
+
+pyautogui.click(screenWidth // 2, screenHeight // 2)
+
+time.sleep(2)
 capture_baseline(detection_box)
+time.sleep(0.5)
+
 while dino_alive:
-    if check_for_obstruction(detection_box, threshold=30):
+    if time.time() - start_time > max_duration:
+        print("Time limit reached.")
+        break
+    if is_obstructed(detection_box, threshold=20):
         jump_dino()
-    else:
-        dino_alive = False
-        break          
+        time.sleep(0.4)
+    time.sleep(0.05)
+       
 
 
