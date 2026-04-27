@@ -19,6 +19,8 @@ detection_box = None
 baseline_edges = None
 screenWidth = None
 screenHeight = None
+searchTop = None
+searchBottom = None
 
 def start_game():
     global screenWidth, screenHeight
@@ -41,6 +43,7 @@ def start_game():
 def game_screenshot():
     screenshot = ImageGrab.grab()
     screenshot.save("full_screen.png")
+    print("full_screen.pgn is saved")
 
 def find_game_screen():
     time.sleep(2)
@@ -50,73 +53,67 @@ def find_game_screen():
     height, width = pixels.shape[:2]
     gray = np.mean(pixels, axis=2)
     
-    # Scan horizontally for a wide white band
+    search_top = int(height * 0.25)
+    search_bottom = int(height * 0.75)
+
     best_region = None
     best_score = 0
     
-    step = 10
-    for top in range(0, height - 100, step):
-        for h in range(100, 300, step):
-            bottom = top + h
-            if bottom >= height:
-                break
-            
-            strip = gray[top:bottom, :]
-            
-            # Score: high white pixel % but also has some dark pixels (dino/obstacles)
-            white_ratio = np.sum(strip > 230) / strip.size
-            dark_ratio = np.sum(strip < 80) / strip.size
-            
-            score = white_ratio * (1 + dark_ratio * 100)
-            
-            if white_ratio > 0.7 and dark_ratio > 0.001 and score > best_score:
-                best_score = score
-                best_region = (0, top, width, bottom)
+    top = search_top 
+    bottom = search_bottom
     
+    strip = gray[top:bottom, :]
+    white_ratio = np.sum(strip > 230) / strip.size
+    dark_ratio = np.sum(strip < 80) / strip.size
+    score = white_ratio * (1 + dark_ratio * 100)
+    
+    if white_ratio > 0.7 and dark_ratio > 0.001 and score > best_score:
+        best_score = score
+        
+        # Find actual left/right boundaries of white region
+        # Look at the middle row of this strip
+        mid_row = gray[(top + bottom) // 2, :]
+        white_cols = np.where(mid_row > 230)[0]
+        if len(white_cols) > 100:  # must be wide enough
+            actual_left = int(white_cols[0])
+            actual_right = int(white_cols[-1])
+            best_region = (actual_left, top, actual_right, bottom)
+
     if best_region:
         left, top, right, bottom = best_region
-        # print(f"Game region: left={left}, top={top}, right={right}, bottom={bottom}")
-        
-        # Annotate and save
-        img_copy = img.copy()
-        draw = ImageDraw.Draw(img_copy)
-        draw.rectangle([left, top, right, bottom], outline="red", width=3)
-        # img_copy.save("detected_game.png")
-        # img_copy.show()
-        # Look some pixels ahead of the dino's position
-        scan_x_start = left + 350 
+        print(f"Game region: left={left}, top={top}, right={right}, bottom={bottom}")
+
+        # Detection box: scan ahead of dino (dino is near left edge of canvas)
+        scan_x_start = left + 350
         scan_x_end = left + 450
-        # Focus on the bottom half of the game area where cacti are
-        scan_y_start = top + (bottom - top) // 2 
-        scan_y_start = bottom - 60  
-        scan_y_end = bottom - 10 
+        scan_y_start = bottom - 60
+        scan_y_end = bottom - 10
 
         detection_box = (scan_x_start, scan_y_start, scan_x_end, scan_y_end)
-        
-        return best_region, detection_box
-    else:
+        return best_region, detection_box, search_top, search_bottom
+    else: 
         print("Game region not found. Try adjusting thresholds.")
         return None
     
 def capture_baseline(detection_box):
     global baseline_edges
-    print(detection_box)
+    print(detection_box) 
     frame = ImageGrab.grab(bbox=detection_box).convert('L')
     edges = np.array(frame.filter(ImageFilter.FIND_EDGES))
     baseline_edges = edges
-    # print(baseline_edges)
+    # print(baseline_edges) 
 
 
 def is_obstructed(detection_box, threshold=20):
-    global baseline_edges
+    global baseline_edges 
     current_frame = ImageGrab.grab(bbox=detection_box).convert('L')
     edges = np.array(current_frame.filter(ImageFilter.FIND_EDGES))
     
-    if baseline_edges is None:
+    if baseline_edges is None: 
         return False
     
     # Compare current edges to baseline — large diff means obstacle appeared
-    diff = np.abs(edges.astype(int) - baseline_edges.astype(int))
+    diff = np.abs(edges.astype(int) - baseline_edges.astype(int)) 
     if diff.mean() > threshold:
         print("An obstruction is found.")
         return True
@@ -124,8 +121,36 @@ def is_obstructed(detection_box, threshold=20):
         return False
 
 def jump_dino():
-    pyautogui.click(screenWidth // 2, screenHeight // 2)
+    pyautogui.click(screenWidth // 2, screenHeight // 2) 
     pyautogui.press('space')
+
+def save_debug_image(best_region, detection_box, search_top, search_bottom):
+    img = Image.open("full_screen.png")
+    draw = ImageDraw.Draw(img)
+    
+    left, top, right, bottom = best_region
+
+    # Search boundary lines
+    draw.line([(0, search_top), (img.width, search_top)], fill="green", width=2)
+    draw.line([(0, search_bottom), (img.width, search_bottom)], fill="purple", width=2)
+
+    # Game region in red
+    draw.rectangle([left, top, right, bottom], outline="red", width=3)
+    
+    # Detection box in green
+    dx1, dy1, dx2, dy2 = detection_box
+    draw.rectangle([dx1, dy1, dx2, dy2], outline="orange", width=3)
+    
+    # Ground line in blue
+    draw.line([(left, bottom - 10), (right, bottom - 10)], fill="blue", width=2)
+    
+    draw.text((dx1, dy1 - 15), "Detection Box", fill="orange")
+    draw.text((left, top - 15), "Game Region", fill="red")
+    draw.text((5, search_top - 15), "Search Top", fill="green")
+    draw.text((5, search_bottom - 15), "Search Bottom", fill="purple")
+    
+    img.save("debug_view.png")
+    img.show()
 
 
 # game area
@@ -143,13 +168,14 @@ if result is None:
     print("Could not find game screen. Exiting.")
     exit()
 
-best_region, detection_box = result   # ← now actually unpacked
+best_region, detection_box, search_top, search_bottom = result
 # print(result)
 
 pyautogui.click(screenWidth // 2, screenHeight // 2)
 
 time.sleep(2)
 capture_baseline(detection_box)
+save_debug_image(best_region=best_region, detection_box=detection_box, search_top=search_top, search_bottom=search_bottom)
 time.sleep(0.5)
 
 while dino_alive:
