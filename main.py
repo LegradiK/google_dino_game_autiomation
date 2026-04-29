@@ -21,8 +21,47 @@ frame_edges = None
 baseline_edges = None
 screenWidth = None
 screenHeight = None
-searchTop = None
-searchBottom = None
+search_top = None
+search_bottom = None
+time_set = [10, 18, 24, 28, 30]
+default_proximity = [400, 450, 150, 10]
+add_proximity = [30, 30, 0, 0]
+prev_frame = None
+estimated_speed = 1.0
+last_speed_check = 0
+BASE_THRESHOLD = 10.0
+
+def estimate_game_speed(detection_box):
+    """
+    Measures how much the screen changes between two frames.
+    More pixel movement = faster game speed.
+    Returns a float: low ~0.5 (slow), high ~3.0+ (fast)
+    """
+    global prev_frame
+
+    frame = np.array(ImageGrab.grab(bbox=detection_box).convert('L'))
+
+    if prev_frame is None or prev_frame.shape != frame.shape:
+        prev_frame = frame
+        return 1.0
+
+    diff = np.abs(frame.astype(int) - prev_frame.astype(int)).mean()
+    prev_frame = frame
+    return diff  # higher = more movement = faster
+
+def get_detection_box_from_proximity(best_region, prox):
+    """
+    Convert a proximity config [x_offset_start, x_offset_end, scan_height, margin]
+    into an absolute screen bbox (x1, y1, x2, y2).
+    
+    prox = [x_start, x_end, height_above_ground, bottom_margin]
+    """
+    left, top, right, bottom = best_region
+    x1 = left + prox[0]
+    x2 = left + prox[1]
+    y1 = bottom - prox[2]   # height_above_ground pixels above ground
+    y2 = bottom - prox[3]   # bottom_margin pixels above ground
+    return (x1, y1, x2, y2)
 
 def start_game():
     global screenWidth, screenHeight
@@ -66,16 +105,8 @@ def find_game_screen():
     best_region = (left, top, right, bottom)
 
     if best_region:
-        left, top, right, bottom = best_region
-        # print(f"Game region: left={left}, top={top}, right={right}, bottom={bottom}")
-
         # Detection box: scan ahead of dino (dino is near left edge of canvas)
-        scan_x_start = left + 400
-        scan_x_end = left + 450
-        scan_y_start = bottom - 150
-        scan_y_end = bottom - 10
-
-        detection_box = (scan_x_start, scan_y_start, scan_x_end, scan_y_end)
+        detection_box = get_detection_box_from_proximity(best_region, default_proximity)
         return best_region, detection_box, search_top, search_bottom
     else: 
         print("Game region not found. Try adjusting thresholds.")
@@ -109,13 +140,24 @@ def is_obstructed(frame_edges, threshold=10):
         baseline_edges = frame_edges  # update baseline so it doesn't re-trigger
         return True
     else:
-        baseline_edges = frame_edges  # keep baseline rolling/fresh
         return False
     
 
 def jump_dino():
     pyautogui.press('space')
     print("Jump")
+
+
+def get_proximity_for_elapsed(elapsed):
+    """
+    Starts at default_proximity, adds add_proximity once per passed time threshold.
+    """
+    current_prox = list(default_proximity)  # copy so we don't mutate the original
+    for i, t in enumerate(time_set):
+        if elapsed >= t:
+            current_prox = [current_prox[j] + add_proximity[j] for j in range(4)]
+    print(current_prox)
+    return current_prox
 
 def save_debug_image(best_region, detection_box, search_top, search_bottom):
     img = Image.open("full_screen.png")
@@ -142,19 +184,19 @@ def save_debug_image(best_region, detection_box, search_top, search_bottom):
     draw.text((5, search_top - 15), "Search Top", fill="green")
     draw.text((5, search_bottom - 15), "Search Bottom", fill="purple")
     
-    img.save("debug_view.png")
+    filename = f"debug_view_{int(time.time())}.png"
     img.show()
+    print(f"Debug image saved: {filename}")
 
 
 # GAME AREA 
 
 start_time = time.time()
-max_duration = 60
+max_duration = 120
 
 dino_alive = True
 
 start_game()
-game_screenshot()
 result = find_game_screen()
 
 if result is None:
@@ -169,20 +211,42 @@ pyautogui.click(screenWidth // 2, screenHeight // 2)
 time.sleep(0.5)
 
 capture_baseline(detection_box)
-# save_debug_image(best_region=best_region, detection_box=detection_box, search_top=search_top, search_bottom=search_bottom)
 
 time.sleep(0.5)
 
+alerted = set()
+
 
 while dino_alive:
-    frame_edges = get_current_frame(detection_box=detection_box)
-    if time.time() - start_time > max_duration:
+    elapsed = time.time() - start_time
+
+    if elapsed > max_duration:
         dino_alive = False
         print("Time limit reached.")
         break
-    if is_obstructed(frame_edges=frame_edges, threshold=10):
+
+    current_prox = get_proximity_for_elapsed(elapsed)
+    new_box = get_detection_box_from_proximity(best_region, current_prox)
+
+    if new_box != detection_box:
+        detection_box = new_box
+        prev_frame = None  # reset speed tracking when box changes
+        capture_baseline(detection_box)
+        print(f"[t={elapsed:.1f}s] Detection box updated → {detection_box}")
+        # game_screenshot()
+        # save_debug_image(best_region=best_region, detection_box=detection_box, search_top=search_top, search_bottom=search_bottom)
+    
+    estimated_speed = estimate_game_speed(detection_box)
+
+    dynamic_threshold = max(5.0, min(15.0, BASE_THRESHOLD - (estimated_speed * 0.3)))
+    print(f"speed={estimated_speed:.2f}  threshold={dynamic_threshold:.2f}")
+
+
+    frame_edges = get_current_frame(detection_box=detection_box)
+    if is_obstructed(frame_edges=frame_edges, threshold=dynamic_threshold):
         jump_dino()
         capture_baseline(detection_box)
-       
+
+        
 
 
