@@ -21,9 +21,10 @@ screenHeight = None
 search_top = None
 search_bottom = None
 time_set = [15, 23, 29, 33, 35]
-default_proximity = [400, 450, 150, 5]
+default_proximity = [450, 500, 150, 5]
 add_proximity = [30, 30, 0, 0]
 THRESHOLD = 10
+still_frames = 0
 
 
 def get_detection_box_from_proximity(best_region, prox):
@@ -127,16 +128,23 @@ def save_debug_image(best_region, detection_box, search_top, search_bottom):
 
 
 def is_game_over():
-    global baseline_edges
+    global baseline_edges, still_frames
     if time.time() - start_time < 4:
+        still_frames = 0
         return False
-    # if screen is completely static (diff = 0), dino has died
+
     frame = np.array(ImageGrab.grab(bbox=detection_box).convert('L'))
     if baseline_edges is None:
         return False
     frame_edges = np.array(Image.fromarray(frame).filter(ImageFilter.FIND_EDGES))
     diff = np.abs(frame_edges.astype(int) - baseline_edges.astype(int)).mean()
-    return diff == 0.0
+
+    if diff == 0.0:
+        still_frames += 1
+    else:
+        still_frames = 0  # reset counter if anything moves
+
+    return still_frames > 20  # only trigger after 20 consecutive still frames
 
 
 def reset_game():
@@ -144,8 +152,6 @@ def reset_game():
 
     print("Dino died. Resetting.")
     time.sleep(0.5)
-    pyautogui.press('space')
-    time.sleep(2)
 
     detection_box  = get_detection_box_from_proximity(best_region, default_proximity)
     baseline_edges = None
@@ -184,12 +190,10 @@ while dino_alive:
 
     if is_game_over():
         reset_game()
-        continue
+        break
 
     frame_edges = get_current_frame(detection_box=detection_box)
     if is_obstructed(frame_edges):
-        save_debug_image(best_region=best_region, detection_box=detection_box,
-                 search_top=search_top, search_bottom=search_bottom)
         jump_dino()
         time.sleep(0.2)
         capture_baseline(detection_box)
