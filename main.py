@@ -22,9 +22,12 @@ search_top = None
 search_bottom = None
 time_set = [15, 23, 29, 33, 35]
 default_proximity = [450, 500, 150, 5]
-add_proximity = [30, 30, 0, 0]
-THRESHOLD = 10
+THRESHOLD = 8
 still_frames = 0
+jump_count = 0
+MAX_JUMPS_PER_SHIFT = 5  # shift box every 3 jumps
+SHIFT_PER_JUMP = [30, 30, 0, 0]  # how much to shift each time
+MAX_PROXIMITY = [600, 650, 150, 5]  # don't shift beyond this
 
 
 def get_detection_box_from_proximity(best_region, prox):
@@ -43,7 +46,7 @@ def start_game():
     time.sleep(3)
     screenWidth, screenHeight = pyautogui.size()
     pyautogui.click(screenWidth // 2, screenHeight // 2)
-    time.sleep(0.5)
+    time.sleep(0.3)
     pyautogui.press('space')
     time.sleep(2)
     return screenWidth, screenHeight
@@ -56,7 +59,6 @@ def game_screenshot():
 
 def find_game_screen():
     global best_region
-    time.sleep(2)
     img = Image.open("full_screen.png")
     pixels = np.array(img)
     height, width = pixels.shape[:2]
@@ -71,7 +73,16 @@ def find_game_screen():
     else:
         print("Game region not found.")
         return None
-
+    
+def move_detection_box(detection_box):
+    global add_proximity
+    start_x, end_x, top, bottom = detection_box
+    add_start_x, add_end_x, add_top, add_bottom = add_proximity
+    new_start_x = start_x + add_start_x
+    new_end_x = end_x + add_end_x
+    new_top = top + add_top
+    new_bottom = bottom + add_bottom
+    detection_box = new_start_x, new_end_x, new_top, new_bottom
 
 def capture_baseline(detection_box):
     global baseline_edges
@@ -80,9 +91,9 @@ def capture_baseline(detection_box):
     baseline_edges = edges
 
 
-def get_current_frame(detection_box):
-    current_frame = ImageGrab.grab(bbox=detection_box).convert('L')
-    return np.array(current_frame.filter(ImageFilter.FIND_EDGES))
+def get_current_frame(grabbed_frame):
+    gray = grabbed_frame.convert('L')
+    return np.array(gray.filter(ImageFilter.FIND_EDGES))
 
 
 def is_obstructed(frame_edges):
@@ -100,8 +111,24 @@ def is_obstructed(frame_edges):
 
 
 def jump_dino():
+    global jump_count, detection_box, baseline_edges
+
     pyautogui.press('space')
-    print("Jump")
+    jump_count += 1
+    print(f"Jump #{jump_count}")
+
+    # shift detection box every MAX_JUMPS_PER_SHIFT jumps
+    if jump_count % MAX_JUMPS_PER_SHIFT == 0:
+        x1, y1, x2, y2 = detection_box
+        new_x1 = min(x1 + SHIFT_PER_JUMP[0], MAX_PROXIMITY[0])
+        new_x2 = min(x2 + SHIFT_PER_JUMP[1], MAX_PROXIMITY[1])
+        new_box = (new_x1, y1, new_x2, y2)
+
+        if new_box != detection_box:
+            detection_box = new_box
+            baseline_edges = None
+            capture_baseline(detection_box)
+            print(f"Detection box shifted → {detection_box}")
 
 
 def save_debug_image(best_region, detection_box, search_top, search_bottom):
@@ -127,34 +154,35 @@ def save_debug_image(best_region, detection_box, search_top, search_bottom):
     print(f"Debug image saved: {filename}")
 
 
-def is_game_over():
-    global baseline_edges, still_frames
+def is_game_over(frame_edges):
+    global still_frames
     if time.time() - start_time < 4:
         still_frames = 0
         return False
-
-    frame = np.array(ImageGrab.grab(bbox=detection_box).convert('L'))
     if baseline_edges is None:
         return False
-    frame_edges = np.array(Image.fromarray(frame).filter(ImageFilter.FIND_EDGES))
+
     diff = np.abs(frame_edges.astype(int) - baseline_edges.astype(int)).mean()
 
     if diff == 0.0:
         still_frames += 1
     else:
-        still_frames = 0  # reset counter if anything moves
+        still_frames = 0
 
-    return still_frames > 20  # only trigger after 20 consecutive still frames
-
+    return still_frames > 20
 
 def reset_game():
-    global detection_box, baseline_edges, start_time
+    global detection_box, baseline_edges, start_time, still_frames, jump_count
 
     print("Dino died. Resetting.")
     time.sleep(0.5)
+    # pyautogui.press('space')
+    # time.sleep(2)
 
     detection_box  = get_detection_box_from_proximity(best_region, default_proximity)
     baseline_edges = None
+    still_frames   = 0
+    jump_count     = 0
     start_time     = time.time()
 
     capture_baseline(detection_box)
@@ -179,8 +207,6 @@ best_region, detection_box, search_top, search_bottom = result
 
 capture_baseline(detection_box)
 
-time.sleep(0.5)
-
 
 while dino_alive:
     if time.time() - start_time > max_duration:
@@ -188,12 +214,17 @@ while dino_alive:
         print("Time limit reached.")
         break
 
-    if is_game_over():
+    grabbed = ImageGrab.grab(bbox=detection_box)
+    frame_edges = get_current_frame(grabbed)
+
+    if is_game_over(frame_edges):
         reset_game()
         break
 
-    frame_edges = get_current_frame(detection_box=detection_box)
     if is_obstructed(frame_edges):
+        save_debug_image(best_region, detection_box, search_top, search_bottom)
         jump_dino()
-        time.sleep(0.2)
+        # save_debug_image(best_region, detection_box, search_top, search_bottom)
+        time.sleep(0.1)
         capture_baseline(detection_box)
+
