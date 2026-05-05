@@ -39,5 +39,5 @@ while True:
 
     if detector.check():
         player.jump()
-        time.sleep(0.1)
+        detector.wait_for_landing()
         detector.capture_baseline()

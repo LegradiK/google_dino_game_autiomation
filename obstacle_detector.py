@@ -1,4 +1,5 @@
 import numpy as np
+import time
 from PIL import ImageGrab, ImageFilter, Image
 from config import DEBUG_DIR
 
@@ -29,6 +30,9 @@ class ObstacleDetector:
         self.baseline = self._grab_edges(box)
         Image.fromarray(self.baseline).save(f"{DEBUG_DIR}/baseline_edges.png")
 
+        print(f"Best region: {self.best_region}")
+        print(f"Detection box: {self.detection_box()}")
+
     def reset(self):
         self.proximity = self.PROXIMITY[:]
         self.baseline = None
@@ -42,7 +46,17 @@ class ObstacleDetector:
         print(f"Obstacle diff={diff:.2f}")
         if diff > self.THRESHOLD:
             print("Obstacle detected")
-            self.baseline = frame
             return True
-        self.baseline = frame
+        self.baseline = frame 
         return False
+    
+    def wait_for_landing(self):
+        prev = self._grab_edges(self.detection_box())
+        while True:
+            time.sleep(0.05)
+            curr = self._grab_edges(self.detection_box())
+            diff = np.abs(curr.astype(int) - prev.astype(int)).mean()
+            if diff < 1.0:  # stable — dino has landed
+                break
+            prev = curr
+        self.baseline = curr
