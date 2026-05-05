@@ -29,7 +29,7 @@ while True:
         print("Time limit reached.")
         break
 
-    if time.time() - last_debug_save > 1:
+    if time.time() - last_debug_save > 5:
         save_debug_image(controller, detector)
         last_debug_save = time.time()
 

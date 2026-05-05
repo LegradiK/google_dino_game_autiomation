@@ -1,11 +1,15 @@
 import subprocess
 import time
+import os
 import pyautogui
 from PIL import ImageGrab
 import numpy as np
 
+
+
 class GameController:
     URL = "https://elgoog.im/dinosaur-game/"
+    DEBUG_DIR = "debug_pics"
 
     def __init__(self):
         self.screen_width = None
@@ -24,7 +28,8 @@ class GameController:
         time.sleep(1.5)
 
     def screenshot(self):
-        ImageGrab.grab().save("full_screen.png")
+        os.makedirs(self.DEBUG_DIR, exist_ok=True)
+        ImageGrab.grab().save(f"{self.DEBUG_DIR}/full_screen.png")
 
     def find_game_region(self):
         from PIL import Image

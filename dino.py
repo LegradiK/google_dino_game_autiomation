@@ -27,7 +27,7 @@ class DinoPlayer:
     def is_game_over(self):
         box = self.detector.cactus_box()
         frame1 = np.array(ImageGrab.grab(bbox=box).convert('L'))
-        time.sleep(0.05)
+        time.sleep(1)
         frame2 = np.array(ImageGrab.grab(bbox=box).convert('L'))
         diff = np.abs(frame1.astype(int) - frame2.astype(int)).mean()
         print(f"motion diff={diff:.2f}")

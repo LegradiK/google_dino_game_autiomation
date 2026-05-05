@@ -1,10 +1,11 @@
 import time
 from PIL import Image, ImageDraw, ImageGrab
 
+DEBUG_DIR = "debug_pics"
 
 def save_debug_image(controller, detector):
-    ImageGrab.grab().save("full_screen.png")
-    img = Image.open("full_screen.png")
+    ImageGrab.grab().save(f"{DEBUG_DIR}/full_screen.png")
+    img = Image.open(f"{DEBUG_DIR}/full_screen.png")
     draw = ImageDraw.Draw(img)
 
     left, top, right, bottom = controller.best_region
@@ -22,6 +23,6 @@ def save_debug_image(controller, detector):
     draw.rectangle([px1, py1, px2, py2], outline="cyan", width=3)
     draw.text((px1, py1 - 15), "Ptero box", fill="cyan")
 
-    filename = f"debug_view_{int(time.time())}.png"
+    filename = f"{DEBUG_DIR}/debug_view_{int(time.time())}.png"
     img.save(filename)
     print(f"Debug image saved: {filename}")
