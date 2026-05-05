@@ -1,0 +1,1 @@
+DEBUG_DIR = "debug_pics"

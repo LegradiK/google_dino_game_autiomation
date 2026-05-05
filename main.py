@@ -18,7 +18,7 @@ controller.screenshot()
 controller.find_game_region()
 
 detector = ObstacleDetector(controller.best_region)
-detector.capture_baselines()
+detector.capture_baseline()
 
 player = DinoPlayer(detector)
 
@@ -40,4 +40,4 @@ while True:
     if detector.check():
         player.jump()
         time.sleep(0.1)
-        detector.capture_baselines()
+        detector.capture_baseline()

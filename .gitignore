@@ -7,3 +7,5 @@ env/
 venv/
 
 *.png
+
+*debug_pics/

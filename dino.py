@@ -20,12 +20,12 @@ class DinoPlayer:
 
         if self.jump_count % MAX_JUMPS_PER_SHIFT == 0:
             d = self.detector
-            for prox in (d.cactus_proximity, d.pterodactyl_proximity):
-                prox[0] = min(prox[0] + SHIFT_PER_JUMP[0], MAX_X[0])
-                prox[1] = min(prox[1] + SHIFT_PER_JUMP[1], MAX_X[1])
+            d.proximity[0] = min(d.proximity[0] + SHIFT_PER_JUMP[0], MAX_X[0])
+            d.proximity[1] = min(d.proximity[1] + SHIFT_PER_JUMP[1], MAX_X[1])
+            print(f"Box shifted → {d.detection_box()}")
 
     def is_game_over(self):
-        box = self.detector.cactus_box()
+        box = self.detector.detection_box()
         frame1 = np.array(ImageGrab.grab(bbox=box).convert('L'))
         time.sleep(1)
         frame2 = np.array(ImageGrab.grab(bbox=box).convert('L'))
