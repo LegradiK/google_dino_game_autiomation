@@ -24,6 +24,7 @@ player = DinoPlayer(detector)
 
 last_debug_save = 0
 
+
 while True:
     if time.time() - player.start_time > MAX_DURATION:
         print("Time limit reached.")
@@ -34,10 +35,9 @@ while True:
         last_debug_save = time.time()
 
     if player.is_game_over():
-        player.reset()
+        print("Game Over")
         break
 
     if detector.check():
         player.jump()
-        detector.wait_for_landing()
         detector.capture_baseline()

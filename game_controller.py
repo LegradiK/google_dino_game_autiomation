@@ -20,7 +20,7 @@ class GameController:
 
     def start(self):
         subprocess.Popen(['firefox', '--new-window', self.URL])
-        time.sleep(3)
+        time.sleep(5)
         self.screen_width, self.screen_height = pyautogui.size()
         pyautogui.click(self.screen_width // 2, self.screen_height // 2)
         time.sleep(0.3)

@@ -20,3 +20,5 @@ def save_debug_image(controller, detector):
     filename = f"{DEBUG_DIR}/debug_view_{int(time.time())}.png"
     img.save(filename)
     print(f"Debug image saved: {filename}")
+
+    
