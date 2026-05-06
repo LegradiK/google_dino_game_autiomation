@@ -29,10 +29,11 @@ while True:
     if time.time() - player.start_time > MAX_DURATION:
         print("Time limit reached.")
         break
-
-    if time.time() - last_debug_save > 5:
-        save_debug_image(controller, detector)
-        last_debug_save = time.time()
+    
+    ## For checking if detection_box is in the right position when game is ongoing
+    # if time.time() - last_debug_save > 5:
+    #     save_debug_image(controller, detector)
+    #     last_debug_save = time.time()
 
     if player.is_game_over():
         print("Game Over")
@@ -40,4 +41,6 @@ while True:
 
     if detector.check():
         player.jump()
-        detector.capture_baseline()
+        time.sleep(0.15)     
+        detector.capture_baseline(save=True) 
+        time.sleep(0.3) 

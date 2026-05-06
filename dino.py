@@ -17,7 +17,6 @@ class DinoPlayer:
     def jump(self):
         pyautogui.press('space')
         print("Jump")
-        time.sleep(0.2)
 
     def is_game_over(self):
         # only check every 2 seconds
