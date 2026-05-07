@@ -3,8 +3,8 @@ import time
 from PIL import ImageGrab
 
 class ObstacleDetector:
-    THRESHOLD = 5
-    PROXIMITY = [420, 580, 140, 8]
+    THRESHOLD = 15
+    PROXIMITY = [300, 500, 120, 8]
 
     def __init__(self, best_region):
         self.best_region = best_region
@@ -28,11 +28,12 @@ class ObstacleDetector:
         diff = np.abs(frame.astype(int) - self.baseline.astype(int)).mean()
         print(f"Obstacle diff={diff:.4f}")
         if diff > self.THRESHOLD:
-            # confirm with second frame
-            time.sleep(0.02)
-            frame2 = self._grab_gray(self.detection_box())
-            diff2 = np.abs(frame2.astype(int) - self.baseline.astype(int)).mean()
-            return diff2 > self.THRESHOLD
+            # # confirm with second frame
+            # time.sleep(0.02)
+            # frame2 = self._grab_gray(self.detection_box())
+            # diff2 = np.abs(frame2.astype(int) - self.baseline.astype(int)).mean()
+            # return diff2 > self.THRESHOLD
+            return True
         return False
 
     def capture_baseline(self, save=False):
